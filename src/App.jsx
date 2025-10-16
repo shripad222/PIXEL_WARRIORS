@@ -96,26 +96,52 @@ function App() {
     }
   };
 
-  // Fetch parking lots from Firestore
+  // Fetch parking lots from Firestore (correctly parsing GeoPoint)
   const fetchParkingLots = async () => {
     try {
       const querySnapshot = await getDocs(collection(db, "parkingLots"));
       const lots = [];
-      querySnapshot.forEach((doc) => {
-        const data = doc.data();
+      querySnapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+
+        // Prefer GeoPoint in data.location; fallback to numeric lat/lng if present
+        let lat;
+        let lng;
+        if (
+          data?.location &&
+          typeof data.location.latitude === "number" &&
+          typeof data.location.longitude === "number"
+        ) {
+          lat = data.location.latitude;
+          lng = data.location.longitude;
+        } else if (
+          typeof data?.lat === "number" &&
+          typeof data?.lng === "number"
+        ) {
+          lat = data.lat;
+          lng = data.lng;
+        } else {
+          console.warn(
+            `Skipping parking lot ${docSnap.id} due to missing or invalid location`
+          );
+          return; // skip this doc
+        }
+
         lots.push({
-          id: doc.id,
+          id: docSnap.id,
+          ...data,
           name: data.name || "Unnamed Parking Lot",
           address: data.address || "No address",
-          lat: parseFloat(data.lat) || 0,
-          lng: parseFloat(data.lng) || 0,
+          lat,
+          lng,
           totalSpots: data.totalSpots || 0,
           availableSpots: data.availableSpots || 0,
         });
       });
+
       setParkingLots(lots);
       console.log("Parking lots fetched:", lots);
-      
+
       if (lots.length === 0) {
         toast.info("No parking lots found in the database.");
       }
@@ -199,6 +225,14 @@ function App() {
   const onAutocompleteLoad = (autocompleteInstance) => {
     setAutocomplete(autocompleteInstance);
   };
+
+  // After successful anonymous sign-in, load parking lots
+  useEffect(() => {
+    if (isLoggedIn) {
+      fetchParkingLots();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoggedIn]);
 
   // Login Screen
   if (!isLoggedIn) {
