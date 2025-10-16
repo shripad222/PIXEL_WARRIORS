@@ -120,6 +120,17 @@ body {
   font-size: 1.3rem;
 }
 
+.test-btn {
+  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+  color: var(--white);
+}
+
+.test-btn:hover {
+  background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(124, 58, 237, 0.3);
+}
+
 /* Main App Container */
 .app-container {
   min-height: 100vh;
@@ -172,7 +183,13 @@ body {
   padding: 0 2rem;
 }
 
-/* Inline controls removed; sticky wrapper no longer required */
+.controls-sticky {
+  position: sticky;
+  top: 72px; /* below header */
+  background: var(--gray-100);
+  z-index: 1500;
+  padding-top: 0.25rem;
+}
 
 .search-input {
   width: 100%;
@@ -198,22 +215,22 @@ body {
   margin-bottom: 1rem;
   flex-wrap: wrap;
   position: relative;
-  z-index: 1001; /* keep above map */
+  z-index: 1001;
 }
 
 .search-button {
   flex: 1;
-  min-width: 150px;
-  padding: 1rem;
+  min-width: 160px;
+  padding: 1.2rem 1.5rem;
   background: var(--primary-blue);
   color: var(--white);
   border: none;
   border-radius: 12px;
-  font-size: 1.1rem;
-  font-weight: 600;
+  font-size: 1.15rem;
+  font-weight: 700;
   cursor: pointer;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.3);
 }
 
 .search-button:hover:not(:disabled) {
@@ -231,17 +248,17 @@ body {
 
 .route-button {
   flex: 1;
-  min-width: 120px;
-  padding: 1rem;
+  min-width: 140px;
+  padding: 1.2rem 1.5rem;
   background: var(--success-green);
   color: var(--white);
   border: none;
   border-radius: 12px;
-  font-size: 1.1rem;
-  font-weight: 600;
+  font-size: 1.15rem;
+  font-weight: 700;
   cursor: pointer;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
+  box-shadow: 0 6px 16px rgba(16, 185, 129, 0.3);
 }
 
 .route-button:hover:not(:disabled) {
@@ -258,16 +275,16 @@ body {
 }
 
 .clear-button {
-  padding: 1rem;
+  padding: 1.2rem 1.5rem;
   background: var(--danger-red);
   color: var(--white);
   border: none;
   border-radius: 12px;
-  font-size: 1.1rem;
-  font-weight: 600;
+  font-size: 1.15rem;
+  font-weight: 700;
   cursor: pointer;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
+  box-shadow: 0 6px 16px rgba(239, 68, 68, 0.3);
 }
 
 .clear-button:hover {
@@ -278,17 +295,17 @@ body {
 
 .toggle-route-button {
   flex: 1;
-  min-width: 140px;
-  padding: 1rem;
+  min-width: 160px;
+  padding: 1.2rem 1.5rem;
   background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%);
   color: var(--white);
   border: none;
   border-radius: 12px;
-  font-size: 1.1rem;
-  font-weight: 600;
+  font-size: 1.15rem;
+  font-weight: 700;
   cursor: pointer;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.25);
+  box-shadow: 0 6px 18px rgba(99, 102, 241, 0.35);
 }
 
 .toggle-route-button:hover {
@@ -684,7 +701,6 @@ body {
 .fab-green { background: linear-gradient(135deg, #22c55e, #16a34a); }
 .fab-indigo { background: linear-gradient(135deg, #6366f1, #4f46e5); }
 .fab-red { background: linear-gradient(135deg, #ef4444, #dc2626); }
-.fab-blue { background: linear-gradient(135deg, #3b82f6, #2563eb); }
 
 /* Responsive Design */
 @media (max-width: 768px) {
