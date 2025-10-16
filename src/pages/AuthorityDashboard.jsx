@@ -49,7 +49,7 @@ export default function AuthorityDashboard() {
   const handleLogout = async () => {
     try {
       await logout();
-      navigate("/authority-portal");
+      navigate("/");
     } catch (error) {
       console.error("Logout error:", error);
     }
