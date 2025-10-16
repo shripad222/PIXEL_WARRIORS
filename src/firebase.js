@@ -1,9 +1,12 @@
 // Import the functions you need from the SDKs you need
 import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
-import { getFirestore } from "firebase/firestore";
+import { getFirestore, GeoPoint } from "firebase/firestore";
 import { getAuth, signInAnonymously, onAuthStateChanged } from "firebase/auth";
 import { getVertexAI, getGenerativeModel } from "firebase/vertexai";
+
+// Export GeoPoint for use in other files
+export { GeoPoint };
 
 // Your web app's Firebase configuration using environment variables
 const firebaseConfig = {

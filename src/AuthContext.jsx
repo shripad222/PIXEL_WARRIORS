@@ -7,7 +7,8 @@ import {
   onAuthStateChanged,
   GoogleAuthProvider,
 } from "firebase/auth";
-import { auth } from "./firebase";
+import { auth, db } from "./firebase";
+import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore";
 import toast from "react-hot-toast";
 
 const AuthContext = createContext();
@@ -19,12 +20,38 @@ export const AuthProvider = ({ children }) => {
 
   // Initialize auth state on mount
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
       setUser(currentUser);
       if (currentUser) {
-        // Get role from localStorage or default to 'driver'
-        const storedRole = localStorage.getItem(`userRole_${currentUser.uid}`);
-        setUserRole(storedRole || "driver");
+        // Get role from Firestore
+        try {
+          const userDocRef = doc(db, "users", currentUser.uid);
+          const userDoc = await getDoc(userDocRef);
+          
+          if (userDoc.exists()) {
+            setUserRole(userDoc.data().role || "driver");
+          } else {
+            // Migrate from old localStorage system
+            const storedRole = localStorage.getItem(`userRole_${currentUser.uid}`);
+            const role = storedRole || "driver";
+            
+            // Create Firestore document for existing user
+            await setDoc(userDocRef, {
+              email: currentUser.email,
+              role: role,
+              createdAt: serverTimestamp(),
+              migratedFromOldSystem: true
+            });
+            
+            setUserRole(role);
+            console.log("Migrated user from old system with role:", role);
+          }
+        } catch (error) {
+          console.error("Error fetching user role:", error);
+          // Fallback to localStorage if Firestore fails
+          const storedRole = localStorage.getItem(`userRole_${currentUser.uid}`);
+          setUserRole(storedRole || "driver");
+        }
       } else {
         setUserRole(null);
       }
@@ -47,7 +74,16 @@ export const AuthProvider = ({ children }) => {
         });
       }
 
-      // Set default role as driver
+      // Create user document in Firestore with driver role
+      const userDocRef = doc(db, "users", result.user.uid);
+      await setDoc(userDocRef, {
+        email: result.user.email,
+        displayName: displayName || null,
+        role: "driver",
+        createdAt: serverTimestamp()
+      });
+
+      // Also set in localStorage for backward compatibility
       localStorage.setItem(`userRole_${result.user.uid}`, "driver");
       setUserRole("driver");
       setUser(result.user);
@@ -68,8 +104,28 @@ export const AuthProvider = ({ children }) => {
     try {
       setLoading(true);
       const result = await signInWithEmailAndPassword(auth, email, password);
-      const storedRole = localStorage.getItem(`userRole_${result.user.uid}`);
-      setUserRole(storedRole || "driver");
+      
+      // Get role from Firestore
+      const userDocRef = doc(db, "users", result.user.uid);
+      const userDoc = await getDoc(userDocRef);
+      
+      let role = "driver";
+      if (userDoc.exists()) {
+        role = userDoc.data().role || "driver";
+      } else {
+        // Migrate from localStorage if document doesn't exist
+        const storedRole = localStorage.getItem(`userRole_${result.user.uid}`);
+        role = storedRole || "driver";
+        
+        await setDoc(userDocRef, {
+          email: result.user.email,
+          role: role,
+          createdAt: serverTimestamp(),
+          migratedFromOldSystem: true
+        });
+      }
+      
+      setUserRole(role);
       setUser(result.user);
       toast.success(`Welcome back, ${result.user.displayName || result.user.email}!`);
       return result.user;
@@ -89,15 +145,30 @@ export const AuthProvider = ({ children }) => {
       const provider = new GoogleAuthProvider();
       const result = await signInWithPopup(auth, provider);
       
-      // Set default role as driver if new user
-      const storedRole = localStorage.getItem(`userRole_${result.user.uid}`);
-      if (!storedRole) {
-        localStorage.setItem(`userRole_${result.user.uid}`, "driver");
-        setUserRole("driver");
+      // Check if user exists in Firestore
+      const userDocRef = doc(db, "users", result.user.uid);
+      const userDoc = await getDoc(userDocRef);
+      
+      let role = "driver";
+      if (!userDoc.exists()) {
+        // New user or migrating from old system
+        const storedRole = localStorage.getItem(`userRole_${result.user.uid}`);
+        role = storedRole || "driver";
+        
+        await setDoc(userDocRef, {
+          email: result.user.email,
+          displayName: result.user.displayName,
+          role: role,
+          createdAt: serverTimestamp(),
+          provider: "google"
+        });
+        
+        localStorage.setItem(`userRole_${result.user.uid}`, role);
       } else {
-        setUserRole(storedRole);
+        role = userDoc.data().role || "driver";
       }
       
+      setUserRole(role);
       setUser(result.user);
       toast.success(`Welcome, ${result.user.displayName}!`);
       return result.user;
