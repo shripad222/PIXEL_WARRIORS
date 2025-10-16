@@ -4,6 +4,18 @@ export default {
     "./index.html",
     "./src/**/*.{js,ts,jsx,tsx}",
   ],
+  // Ensures Tailwind generates some utilities even if none are detected in templates
+  // which prevents the "No utility classes were detected" warning during dev
+  safelist: [
+    'hidden',
+    'sr-only',
+    'flex',
+    'items-center',
+    'justify-center',
+    'text-center',
+    'container',
+    'mx-auto',
+  ],
   theme: {
     extend: {
       colors: {
