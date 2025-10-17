@@ -1,0 +1,179 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper function to check if user is authenticated
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    
+    // Helper function to check if user is the document owner
+    function isOwner(userId) {
+      return request.auth.uid == userId;
+    }
+    
+    // Helper function to get user role from users collection
+    function getUserRole() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role;
+    }
+    
+    // Helper function to check if user is an authority
+    function isAuthority() {
+      return isSignedIn() && getUserRole() == 'authority';
+    }
+    
+    // Helper function to check if user is a driver
+    function isDriver() {
+      return isSignedIn() && getUserRole() == 'driver';
+    }
+    
+    // ============================================
+    // USERS COLLECTION
+    // ============================================
+    match /users/{userId} {
+      // Allow users to read their own profile
+      allow read: if isSignedIn() && isOwner(userId);
+      
+      // Allow users to create their own profile during registration
+      allow create: if isSignedIn() && isOwner(userId)
+                    && request.resource.data.keys().hasAll(['email', 'role', 'createdAt'])
+                    && request.resource.data.role in ['driver', 'authority'];
+      
+      // Allow users to update their own profile
+      allow update: if isSignedIn() && isOwner(userId)
+                    && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['role', 'createdAt']);
+      
+      // Don't allow users to delete their profiles
+      allow delete: if false;
+    }
+    
+    // ============================================
+    // PARKING LOTS COLLECTION
+    // ============================================
+    match /parkingLots/{lotId} {
+      // Anyone (authenticated or not) can read parking lots for public access
+      allow read: if true;
+      
+      // Only authorities can create new parking lots
+      allow create: if isAuthority()
+                    && request.resource.data.keys().hasAll([
+                      'name', 'address', 'location', 
+                      'totalSpots', 'availableSpots'
+                    ])
+                    && request.resource.data.availableSpots >= 0
+                    && request.resource.data.totalSpots >= request.resource.data.availableSpots
+                    && request.resource.data.managerId == request.auth.uid;
+      
+      // UPDATED: Allow updates from:
+      // 1. Authorities - for managing their own parking lots
+      // 2. Authorities - for QR scan entry/exit (decrement/increment spots)
+      // 3. Authenticated users - for booking operations (spot availability changes)
+      allow update: if isSignedIn() && (
+        // Authority managing their own lot
+        (isAuthority() && resource.data.managerId == request.auth.uid) ||
+        // Any authenticated user updating only availableSpots (for booking/QR scanning)
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['availableSpots'])
+         && request.resource.data.availableSpots >= 0
+         && request.resource.data.availableSpots <= resource.data.totalSpots)
+      );
+      
+      // Only authorities can delete their own parking lots
+      allow delete: if isAuthority() && resource.data.managerId == request.auth.uid;
+    }
+    
+    // ============================================
+    // BOOKINGS COLLECTION (Optional - for future use)
+    // ============================================
+    match /bookings/{bookingId} {
+      // Users can read their own bookings
+      // Authorities can read all bookings (for dashboard)
+      allow read: if isSignedIn() && (
+        resource.data.userId == request.auth.uid ||
+        isAuthority() ||
+        (resource.data.managerId != null && resource.data.managerId == request.auth.uid)
+      );
+      
+      // Only drivers can create bookings
+      // Required fields: userId, parkingLotId, status, createdAt
+      allow create: if isDriver()
+                    && request.resource.data.userId == request.auth.uid
+                    && request.resource.data.keys().hasAll([
+                      'userId', 'parkingLotId', 'status', 'createdAt'
+                    ])
+                    && request.resource.data.status in ['active', 'pending_arrival', 'pending', 'completed', 'cancelled', 'no_show', 'in_parking'];
+      
+      // UPDATED: Allow updates from:
+      // 1. Booking owner (driver) - for cancellation, etc.
+      // 2. Authority/Manager - for confirming arrival, QR scanning (entry/exit)
+      // 3. System updates - for no-show expiration
+      allow update: if isSignedIn() && (
+        // Driver can update their own booking
+        resource.data.userId == request.auth.uid ||
+        // Authority can update bookings they manage (for QR scanning, arrival confirmation)
+        (isAuthority() && resource.data.managerId == request.auth.uid) ||
+        // Allow status updates for system processes
+        request.resource.data.status in ['no_show', 'active', 'pending_arrival', 'in_parking', 'completed', 'expired']
+      );
+      
+      // Users can delete their own bookings
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+    
+    // ============================================
+    // REVIEWS COLLECTION (Optional - for future use)
+    // ============================================
+    match /reviews/{reviewId} {
+      // Anyone can read reviews
+      allow read: if true;
+      
+      // Only authenticated drivers can create reviews
+      allow create: if isDriver()
+                    && request.resource.data.userId == request.auth.uid
+                    && request.resource.data.keys().hasAll([
+                      'userId', 'parkingLotId', 'rating', 'comment', 'createdAt'
+                    ])
+                    && request.resource.data.rating >= 1 
+                    && request.resource.data.rating <= 5;
+      
+      // Users can update their own reviews
+      allow update: if isSignedIn() && resource.data.userId == request.auth.uid;
+      
+      // Users can delete their own reviews
+      allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;
+    }
+    
+    // ============================================
+    // PAYMENTS COLLECTION (Optional - for future use)
+    // ============================================
+    match /payments/{paymentId} {
+      // Users can only read their own payment records
+      allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+      
+      // System creates payment records (could be done via Cloud Functions)
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      
+      // No updates or deletes allowed for payment records
+      allow update, delete: if false;
+    }
+    
+    // ============================================
+    // ANALYTICS COLLECTION (Authority Dashboard)
+    // ============================================
+    match /analytics/{analyticsId} {
+      // Only authorities can read analytics
+      allow read: if isAuthority();
+      
+      // Only system (via Cloud Functions) should write analytics
+      allow write: if false;
+    }
+    
+    // ============================================
+    // DEFAULT DENY ALL
+    // ============================================
+    // Deny access to any other collections not explicitly defined
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
