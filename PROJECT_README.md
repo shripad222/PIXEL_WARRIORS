@@ -1,6 +1,8 @@
-# Smart Car Parking Availability and Management System
+# PARK_EASY - Smart Parking Solution
 
 A modern web application built with React and Firebase that helps drivers find available parking spaces in real-time and enables authorities to manage parking facilities efficiently.
+
+**Project by:** PIXEL_WARRIORS
 
 ## 🚀 Features
 

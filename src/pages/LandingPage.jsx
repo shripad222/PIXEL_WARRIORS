@@ -10,7 +10,7 @@ export default function LandingPage() {
       <div className="auth-card" style={{ maxWidth: '500px' }}>
         <div className="auth-header">
           <FaParking className="auth-icon" />
-          <h1>Smart Car Parking System</h1>
+          <h1>PARK_EASY</h1>
           <p>Choose your role to continue</p>
         </div>
 

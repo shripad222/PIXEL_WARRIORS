@@ -48,7 +48,7 @@ export default function Login() {
       <div className="auth-card">
         <div className="auth-header">
           <FaParking className="auth-icon" />
-          <h1>Smart Car Parking</h1>
+          <h1>PARK_EASY</h1>
           <p>Driver Login</p>
         </div>
 

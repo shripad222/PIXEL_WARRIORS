@@ -1342,7 +1342,7 @@ Example 2: "Show me parking near Margao" -> {"origin": "CURRENT_LOCATION", "dest
       <div className="header">
         <div className="header-content">
           <FaParking className="header-icon" />
-          <h1>Smart Parking System</h1>
+          <h1>PARK_EASY</h1>
           <span className="user-badge">Driver</span>
           <button className="clear-button" style={{marginLeft: 'auto'}} onClick={handleLogout}>
             <FaSignOutAlt style={{marginRight: '0.5rem'}} /> Logout
