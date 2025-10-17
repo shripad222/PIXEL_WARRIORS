@@ -22,14 +22,15 @@
 }
 
 .qr-scanner-modal {
-  background: white;
+  background: white !important;
   border-radius: 20px;
   max-width: 600px;
   width: 90%;
   max-height: 90vh;
   overflow: hidden;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
   animation: slideUp 0.3s ease;
+  border: 2px solid #e5e7eb;
 }
 
 @keyframes slideUp {
@@ -129,7 +130,8 @@
   border: 2px solid #d1d5db;
   border-radius: 10px;
   font-size: 0.95rem;
-  background: white;
+  background: white !important;
+  color: #1f2937 !important;
   cursor: pointer;
   transition: all 0.3s ease;
 }

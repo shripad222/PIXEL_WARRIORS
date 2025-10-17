@@ -587,45 +587,292 @@
   border: 2px dashed #d1d5db;
 }
 
-/* Responsive Adjustments */
-@media (max-width: 768px) {
+/* Responsive Design - Mobile First Approach */
+@media screen and (max-width: 1024px) {
   .authority-dashboard {
     padding: 1rem;
+    padding-bottom: env(safe-area-inset-bottom, 1rem);
   }
 
   .dashboard-section {
-    padding: 1.5rem;
+    padding: 1rem;
+    margin-bottom: 1rem;
+    border-radius: 10px;
+  }
+
+  .dashboard-section h2 {
+    font-size: clamp(1.125rem, 4vw, 1.5rem);
+    margin-bottom: 1rem;
   }
 
   .metrics-grid {
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .metric-card {
+    padding: 1rem;
+    min-height: 100px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .metric-card h3 {
+    font-size: 0.75rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .metric-card p {
+    font-size: clamp(1.25rem, 5vw, 1.75rem);
+  }
+
+  .bookings-list {
     grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .booking-card {
+    padding: 1rem;
+    margin-bottom: 0.5rem;
+  }
+
+  .booking-header {
+    flex-direction: column;
+    gap: 0.5rem;
+    align-items: flex-start;
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+  }
+
+  .booking-header h4 {
+    font-size: 1.1rem;
+  }
+
+  .booking-type-badge {
+    font-size: 0.7rem;
+    padding: 0.25rem 0.75rem;
+  }
+
+  .booking-details-grid {
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+
+  .detail-section {
+    padding: 0.75rem;
+  }
+
+  .detail-section .detail-icon {
+    font-size: 1.25rem;
+  }
+
+  .detail-value {
+    font-size: 0.875rem;
+  }
+
+  .booking-footer {
+    flex-direction: column;
+    gap: 1rem;
+    align-items: flex-start;
+  }
+
+  .booking-actions {
+    width: 100%;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .confirm-arrival-btn {
+    width: 100%;
+    justify-content: center;
+    min-height: 44px;
   }
 
   .lot-management-container {
     grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+
+  .lot-card {
+    padding: 1rem;
+  }
+
+  .spot-updater button {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
   }
 
   .form-grid {
     grid-template-columns: 1fr;
+    gap: 0.75rem;
   }
 
-  .metric-card p {
-    font-size: 1.75rem;
+  .form-grid input {
+    height: 44px;
+    font-size: 16px; /* Prevent zoom on iOS */
   }
-}
 
-@media (max-width: 480px) {
-  .dashboard-section h2 {
-    font-size: 1.25rem;
+  .parking-lot-form {
+    padding: 1rem;
   }
 
   .toggle-form-btn {
-    font-size: 1rem;
-    padding: 0.875rem 1rem;
+    min-height: 44px;
+    font-size: 0.95rem;
+    padding: 0.75rem 1rem;
+  }
+
+  .qr-scanner-buttons {
+    width: 100%;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .qr-scan-btn {
+    width: 100%;
+    justify-content: center;
+    min-height: 44px;
+    font-size: 0.9rem;
+  }
+}
+
+/* Tablet Optimizations */
+@media screen and (min-width: 481px) and (max-width: 768px) {
+  .metrics-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .booking-details-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .booking-footer {
+    flex-direction: row;
+    align-items: center;
+  }
+
+  .booking-actions {
+    flex-direction: row;
+    width: auto;
+  }
+
+  .qr-scanner-buttons {
+    flex-direction: row;
+  }
+}
+
+/* Small Device Optimizations */
+@media screen and (max-width: 480px) {
+  .dashboard-section {
+    margin: 0.5rem;
+    padding: 0.75rem;
+  }
+
+  .metric-card {
+    min-height: 90px;
   }
 
   .metric-card p {
-    font-size: 1.5rem;
+    font-size: 1.25rem;
+  }
+
+  .booking-card {
+    margin: 0.5rem;
+  }
+
+  .qr-scan-status {
+    flex-direction: column;
+    padding: 0.75rem;
+    gap: 0.5rem;
+  }
+
+  .scan-status-item {
+    width: 100%;
+  }
+
+  .scan-divider {
+    transform: rotate(90deg);
+  }
+
+  /* Touch Optimizations */
+  button,
+  .confirm-arrival-btn,
+  .qr-scan-btn,
+  .toggle-form-btn,
+  .spot-updater button {
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  input,
+  select {
+    font-size: 16px !important;
+    height: 44px;
+  }
+}
+
+/* Landscape Mode Optimizations */
+@media screen and (max-height: 600px) and (orientation: landscape) {
+  .authority-dashboard {
+    padding: 0.5rem;
+  }
+
+  .metrics-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .booking-details-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .booking-card {
+    max-height: 80vh;
+    overflow-y: auto;
+  }
+}
+
+/* Bright Theme Enforcement - Authority Dashboard */
+.authority-dashboard {
+  background-color: #f9fafb !important;
+}
+
+.dashboard-section,
+.booking-card,
+.lot-card {
+  background-color: white !important;
+  border-color: #e5e7eb !important;
+  color: #1f2937 !important;
+}
+
+.metric-card {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+  color: white !important;
+}
+
+.detail-section {
+  background-color: #f9fafb !important;
+  border-color: #e5e7eb !important;
+}
+
+.detail-value {
+  color: #1f2937 !important;
+}
+
+input {
+  background-color: white !important;
+  color: #1f2937 !important;
+  border-color: #d1d5db !important;
+}
+
+/* High DPI Screen Optimizations */
+@media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 192dpi) {
+  .booking-card,
+  .lot-card,
+  .detail-section {
+    border-width: 0.5px;
   }
 }
 
