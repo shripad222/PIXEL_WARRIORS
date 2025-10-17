@@ -94,10 +94,12 @@ service cloud.firestore {
                     && request.resource.data.keys().hasAll([
                       'userId', 'parkingLotId', 'status', 'createdAt'
                     ])
-                    && request.resource.data.status in ['active', 'pending', 'completed', 'cancelled'];
+                    && request.resource.data.status in ['active', 'pending_arrival', 'pending', 'completed', 'cancelled', 'no_show'];
       
-      // Users can update their own bookings (e.g., cancel)
-      allow update: if isSignedIn() && resource.data.userId == request.auth.uid;
+      // Users can update their own bookings (e.g., cancel, confirm arrival)
+      // Also allow system updates for no-show expiration
+      allow update: if (isSignedIn() && resource.data.userId == request.auth.uid)
+                    || (isSignedIn() && request.resource.data.status in ['no_show', 'active', 'pending_arrival']);
       
       // Users can delete their own bookings
       allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;

@@ -1359,6 +1359,11 @@ body {
   padding: 0.75rem;
   border-radius: 8px;
   margin-top: 1rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem;
 }
 
 .booking-id span {
@@ -1367,14 +1372,72 @@ body {
   font-family: 'Courier New', monospace;
 }
 
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.375rem 0.875rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.status-badge.pending {
+  background: linear-gradient(135deg, #fbbf24 0%, #f59e0b 100%);
+  color: #78350f;
+  animation: pulse-warning 2s infinite;
+}
+
+.status-badge.active {
+  background: linear-gradient(135deg, #34d399 0%, #10b981 100%);
+  color: #065f46;
+  animation: pulse-success 2s infinite;
+}
+
+@keyframes pulse-warning {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.8; }
+}
+
+@keyframes pulse-success {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.85; }
+}
+
 .booking-card-footer {
   padding: 1rem 1.5rem;
   background: var(--gray-50);
   border-top: 1px solid var(--gray-200);
+  display: flex;
+  gap: 0.75rem;
+}
+
+.confirm-arrival-btn {
+  flex: 1;
+  padding: 0.9rem 1.5rem;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: var(--white);
+  border: none;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.confirm-arrival-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
+}
+
+.confirm-arrival-btn:active {
+  transform: translateY(0);
 }
 
 .cancel-booking-btn {
-  width: 100%;
+  flex: 1;
   padding: 0.9rem 1.5rem;
   background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
   color: var(--white);

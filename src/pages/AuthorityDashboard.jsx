@@ -3,12 +3,12 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../AuthContext";
 import { db } from "../firebase";
 import { 
-  collection, query, where, onSnapshot, addDoc, updateDoc, doc, increment, GeoPoint 
+  collection, query, where, onSnapshot, addDoc, updateDoc, doc, increment, GeoPoint, serverTimestamp 
 } from "firebase/firestore";
 import toast, { Toaster } from "react-hot-toast";
 import { 
   FaParking, FaSignOutAlt, FaChartBar, FaBookmark, FaPlusCircle, 
-  FaChevronDown, FaPlus, FaMinus
+  FaChevronDown, FaPlus, FaMinus, FaCheckCircle
 } from "react-icons/fa";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import "./AuthorityDashboard.css";
@@ -73,6 +73,33 @@ export default function AuthorityDashboard() {
       await updateDoc(doc(db, "parkingLots", lotId), { availableSpots: newSpots });
     } catch (error) {
       toast.error("Could not update spots.");
+    }
+  };
+
+  const handleConfirmArrival = async (booking) => {
+    if (!confirm(`Confirm that ${booking.userName} has arrived at ${booking.parkingLotName}?`)) {
+      return;
+    }
+
+    const loadingToast = toast.loading("Confirming arrival...");
+
+    try {
+      // Update booking status to 'active'
+      const bookingRef = doc(db, "bookings", booking.id);
+      await updateDoc(bookingRef, {
+        status: "active",
+        actualArrivalTime: serverTimestamp(),
+      });
+
+      toast.success(
+        `✅ Driver arrival confirmed!\n\nDriver: ${booking.userName}\nParking: ${booking.parkingLotName}`,
+        { id: loadingToast, duration: 5000 }
+      );
+
+      console.log(`✅ Booking ${booking.id} confirmed - Driver has arrived`);
+    } catch (error) {
+      console.error("Error confirming arrival:", error);
+      toast.error("Failed to confirm arrival. Please try again.", { id: loadingToast });
     }
   };
 
@@ -173,20 +200,158 @@ export default function AuthorityDashboard() {
 
         {/* Live Bookings Section */}
         <div className="dashboard-section">
-          <h2><FaBookmark /> Live Bookings ({activeBookings.filter(b => b.status === 'active').length})</h2>
+          <h2><FaBookmark /> Live Bookings ({activeBookings.filter(b => b.status === 'active' || b.status === 'pending_arrival').length})</h2>
           <div className="bookings-list">
-            {activeBookings.filter(b => b.status === 'active').length > 0 ? (
-              activeBookings.filter(b => b.status === 'active').map(booking => (
-                <div key={booking.id} className="booking-card">
-                  <h4>{booking.parkingLotName || 'Unknown Parking Lot'}</h4>
-                  <p><strong>Duration:</strong> {booking.duration} hour(s)</p>
-                  <p><strong>Amount:</strong> ₹{booking.amount}</p>
-                  <p><strong>Driver:</strong> {booking.userName || 'Unknown Driver'}</p>
-                  <p><strong>Email:</strong> {booking.userEmail || 'N/A'}</p>
-                  <p><strong>Status:</strong> <span style={{color: '#10b981', fontWeight: 'bold'}}>{booking.status}</span></p>
-                  <span style={{fontSize: '0.85rem', color: '#666'}}>Booking ID: {booking.id.slice(0, 12)}...</span>
-                </div>
-              ))
+            {activeBookings.filter(b => b.status === 'active' || b.status === 'pending_arrival').length > 0 ? (
+              activeBookings.filter(b => b.status === 'active' || b.status === 'pending_arrival').map(booking => {
+                // Convert Firestore timestamps to Date objects
+                const startTime = booking.startTime instanceof Date 
+                  ? booking.startTime 
+                  : booking.startTime?.toDate?.() || new Date();
+                const endTime = booking.endTime instanceof Date 
+                  ? booking.endTime 
+                  : booking.endTime?.toDate?.() || new Date();
+                const createdAt = booking.createdAt instanceof Date 
+                  ? booking.createdAt 
+                  : booking.createdAt?.toDate?.() || new Date();
+
+                // Format dates for display
+                const formatDateTime = (date) => {
+                  return date.toLocaleString('en-IN', {
+                    month: 'short',
+                    day: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: true
+                  });
+                };
+
+                const formatTime = (date) => {
+                  return date.toLocaleString('en-IN', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    hour12: true
+                  });
+                };
+
+                const formatDate = (date) => {
+                  return date.toLocaleString('en-IN', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric'
+                  });
+                };
+
+                // Check if booking is happening today
+                const isToday = startTime.toDateString() === new Date().toDateString();
+                const now = new Date();
+                const isArrived = now >= startTime;
+                const isPending = booking.status === 'pending_arrival';
+                
+                // Calculate grace period expiry
+                const expiryTime = booking.expiryTime instanceof Date 
+                  ? booking.expiryTime 
+                  : booking.expiryTime?.toDate?.() || null;
+
+                return (
+                  <div key={booking.id} className={`booking-card enhanced ${isPending ? 'pending' : ''}`}>
+                    <div className="booking-header">
+                      <h4>{booking.parkingLotName || 'Unknown Parking Lot'}</h4>
+                      <span className="booking-type-badge">
+                        {booking.isAdvanceBooking ? '📅 Advance' : '⚡ Book Now'}
+                      </span>
+                    </div>
+
+                    {/* Show pending status alert */}
+                    {isPending && (
+                      <div className="pending-alert">
+                        <span className="alert-icon">⏳</span>
+                        <div className="alert-content">
+                          <strong>Awaiting Driver Arrival</strong>
+                          <span className="alert-text">
+                            Grace period expires at: {expiryTime ? formatDateTime(expiryTime) : 'N/A'}
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="booking-details-grid">
+                      {/* Arrival Information */}
+                      <div className="detail-section arrival">
+                        <span className="detail-icon">🚗</span>
+                        <div className="detail-content">
+                          <span className="detail-label">Arrival Time</span>
+                          <span className="detail-value">{formatDateTime(startTime)}</span>
+                          {!isArrived && (
+                            <span className="status-tag upcoming">Upcoming</span>
+                          )}
+                          {isArrived && now < endTime && (
+                            <span className="status-tag active">In Progress</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Departure Information */}
+                      <div className="detail-section departure">
+                        <span className="detail-icon">🏁</span>
+                        <div className="detail-content">
+                          <span className="detail-label">Departure Time</span>
+                          <span className="detail-value">{formatDateTime(endTime)}</span>
+                        </div>
+                      </div>
+
+                      {/* Duration */}
+                      <div className="detail-section">
+                        <span className="detail-icon">⏱️</span>
+                        <div className="detail-content">
+                          <span className="detail-label">Duration</span>
+                          <span className="detail-value">{booking.duration} hour(s)</span>
+                        </div>
+                      </div>
+
+                      {/* Amount */}
+                      <div className="detail-section">
+                        <span className="detail-icon">💰</span>
+                        <div className="detail-content">
+                          <span className="detail-label">Amount</span>
+                          <span className="detail-value">₹{booking.amount}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="driver-info">
+                      <div className="info-row">
+                        <span className="info-label">👤 Driver:</span>
+                        <span className="info-value">{booking.userName || 'Unknown Driver'}</span>
+                      </div>
+                      <div className="info-row">
+                        <span className="info-label">📧 Email:</span>
+                        <span className="info-value">{booking.userEmail || 'N/A'}</span>
+                      </div>
+                      <div className="info-row">
+                        <span className="info-label">📅 Booked At:</span>
+                        <span className="info-value">{formatDateTime(createdAt)}</span>
+                      </div>
+                    </div>
+
+                    <div className="booking-footer">
+                      <span className="booking-id">ID: {booking.id.slice(0, 12)}...</span>
+                      <div className="booking-actions">
+                        {isPending ? (
+                          <button 
+                            className="confirm-arrival-btn"
+                            onClick={() => handleConfirmArrival(booking)}
+                          >
+                            <FaCheckCircle /> Confirm Arrival
+                          </button>
+                        ) : (
+                          <span className="status-active">● Active</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
             ) : (
               <p className="no-lots-message">No active bookings.</p>
             )}

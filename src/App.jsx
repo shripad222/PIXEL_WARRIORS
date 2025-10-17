@@ -226,13 +226,11 @@ function App() {
     console.log("🔍 Setting up real-time listener for bookings...");
 
     try {
-      // Create a query to get only this user's active bookings
+      // Create a query to get user's pending and active bookings
+      // Note: We query for userId only, then filter by status in JavaScript
       const bookingsQuery = query(
         collection(db, "bookings"),
-        where("userId", "==", user.uid),
-        where("status", "==", "active")
-        // Note: orderBy removed temporarily to avoid index requirement
-        // Will sort in JavaScript after fetching
+        where("userId", "==", user.uid)
       );
 
       // Set up real-time listener
@@ -242,20 +240,25 @@ function App() {
           const bookings = [];
           snapshot.forEach((doc) => {
             const data = doc.data();
-            bookings.push({
-              id: doc.id,
-              ...data,
-              // Convert Firestore timestamps to readable format
-              createdAt: data.createdAt?.toDate?.() || new Date(),
-              startTime: data.startTime instanceof Date ? data.startTime : data.startTime?.toDate?.() || new Date(),
-              endTime: data.endTime instanceof Date ? data.endTime : data.endTime?.toDate?.() || new Date(),
-            });
+            
+            // Only include pending_arrival and active bookings
+            if (data.status === 'pending_arrival' || data.status === 'active') {
+              bookings.push({
+                id: doc.id,
+                ...data,
+                // Convert Firestore timestamps to readable format
+                createdAt: data.createdAt?.toDate?.() || new Date(),
+                startTime: data.startTime instanceof Date ? data.startTime : data.startTime?.toDate?.() || new Date(),
+                endTime: data.endTime instanceof Date ? data.endTime : data.endTime?.toDate?.() || new Date(),
+                graceExpiryTime: data.graceExpiryTime instanceof Date ? data.graceExpiryTime : data.graceExpiryTime?.toDate?.() || null,
+              });
+            }
           });
           
           // Sort by createdAt in JavaScript (newest first)
           bookings.sort((a, b) => b.createdAt - a.createdAt);
           
-          console.log(`✅ Real-time update: Loaded ${bookings.length} active bookings for user ${user.uid}`);
+          console.log(`✅ Real-time update: Loaded ${bookings.length} bookings (pending + active) for user ${user.uid}`);
           if (bookings.length > 0) {
             console.log("Booking IDs:", bookings.map(b => b.id));
             console.log("First booking:", bookings[0]);
@@ -820,6 +823,7 @@ Example 2: "Show me parking near Margao" -> {"origin": "CURRENT_LOCATION", "dest
     // 6. Validate start time for advance booking
     let startTime, endTime;
     const now = new Date();
+    const BUFFER_TIME_MINUTES = 30; // Buffer time for "Book Now" to reach parking lot
 
     if (isAdvanceBooking) {
       // Advance booking - user selected a future time
@@ -846,9 +850,10 @@ Example 2: "Show me parking near Margao" -> {"origin": "CURRENT_LOCATION", "dest
 
       endTime = new Date(startTime.getTime() + bookingDuration * 60 * 60 * 1000);
     } else {
-      // Immediate booking - starts now
-      startTime = now;
-      endTime = new Date(now.getTime() + bookingDuration * 60 * 60 * 1000);
+      // "Book Now" - starts after buffer time (e.g., 30 minutes from now)
+      // This gives user time to reach the parking lot
+      startTime = new Date(now.getTime() + BUFFER_TIME_MINUTES * 60 * 1000);
+      endTime = new Date(startTime.getTime() + bookingDuration * 60 * 60 * 1000);
     }
 
     // 7. Check for booking conflicts (prevent double booking)
@@ -921,13 +926,26 @@ Example 2: "Show me parking near Margao" -> {"origin": "CURRENT_LOCATION", "dest
       timeStyle: 'short'
     });
 
-    const confirmMessage = `Confirm ${isAdvanceBooking ? 'Advance ' : ''}Booking:\n\n` +
-      `Parking: ${selectedParkingLot.name}\n` +
-      `Start Time: ${startTimeStr}\n` +
-      `End Time: ${endTimeStr}\n` +
-      `Duration: ${bookingDuration} hour(s)\n` +
-      `Amount: ₹${totalAmount}\n\n` +
-      `Proceed with booking?`;
+    let confirmMessage;
+    if (isAdvanceBooking) {
+      confirmMessage = `Confirm Advance Booking:\n\n` +
+        `Parking: ${selectedParkingLot.name}\n` +
+        `Start Time: ${startTimeStr}\n` +
+        `End Time: ${endTimeStr}\n` +
+        `Duration: ${bookingDuration} hour(s)\n` +
+        `Amount: ₹${totalAmount}\n\n` +
+        `Proceed with booking?`;
+    } else {
+      // For "Book Now" - show buffer time info
+      confirmMessage = `Confirm "Book Now" Booking:\n\n` +
+        `Parking: ${selectedParkingLot.name}\n` +
+        `🕐 Your slot will be available from: ${startTimeStr}\n` +
+        `   (${BUFFER_TIME_MINUTES} minutes from now - time to reach parking)\n` +
+        `End Time: ${endTimeStr}\n` +
+        `Duration: ${bookingDuration} hour(s)\n` +
+        `Amount: ₹${totalAmount}\n\n` +
+        `Proceed with booking?`;
+    }
 
     if (!confirm(confirmMessage)) {
       return; // User cancelled
@@ -968,18 +986,28 @@ Example 2: "Show me parking near Margao" -> {"origin": "CURRENT_LOCATION", "dest
       console.log("Parking spot reserved successfully");
 
       // Step 2: Create booking record with all required fields
+      
+      // Calculate grace period and expiry time for no-show prevention
+      const GRACE_PERIOD_MINUTES = 15; // 15-minute grace period after arrival time
+      const graceExpiryTime = new Date(startTime.getTime() + GRACE_PERIOD_MINUTES * 60 * 1000);
+      
       const bookingData = {
         // Required fields (matching Firestore security rules)
         userId: user.uid,
         parkingLotId: selectedParkingLot.id,
         managerId: selectedParkingLot.managerId || null, // Add manager ID for authority dashboard
-        status: "active",
+        status: "pending_arrival", // Changed from "active" to "pending_arrival"
         createdAt: serverTimestamp(),
         
         // Time fields - using the calculated start and end times
         startTime: startTime, // Can be now or future time
         endTime: endTime, // Calculated based on duration
         isAdvanceBooking: isAdvanceBooking, // Track if it's advance or immediate
+        
+        // No-show prevention fields
+        graceExpiryTime: graceExpiryTime, // Time when booking expires if driver doesn't arrive
+        gracePeriodMinutes: GRACE_PERIOD_MINUTES, // Grace period duration
+        arrivalConfirmed: false, // Will be set to true when driver arrives
         
         // Additional metadata
         userEmail: user.email || "no-email",
@@ -1004,7 +1032,8 @@ Example 2: "Show me parking near Margao" -> {"origin": "CURRENT_LOCATION", "dest
       console.log("   - User ID:", user.uid);
       console.log("   - Parking Lot:", selectedParkingLot.name);
       console.log("   - Manager ID:", selectedParkingLot.managerId || "N/A");
-      console.log("   - Status: active");
+      console.log("   - Status: pending_arrival");
+      console.log("   - Grace Expiry Time:", graceExpiryTime.toLocaleString());
       console.log("🔄 Real-time listener should detect this change automatically...");
 
       // Step 3: Update local state to reflect changes immediately
@@ -1029,16 +1058,29 @@ Example 2: "Show me parking near Margao" -> {"origin": "CURRENT_LOCATION", "dest
       setIsAdvanceBooking(false);
       
       // Success notification with booking details
-      const bookingTypeText = isAdvanceBooking ? "Advance Booking" : "Booking";
-      toast.success(
-        `✅ ${bookingTypeText} Confirmed!\n\n` +
-        `Booking ID: ${bookingDoc.id.substring(0, 8)}...\n` +
-        `Start: ${startTime.toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}\n` +
-        `Duration: ${bookingDuration} hour(s)\n` +
-        `Amount: ₹${totalAmount}\n\n` +
-        `Your parking spot is reserved!`,
-        { duration: 6000 }
-      );
+      if (isAdvanceBooking) {
+        toast.success(
+          `✅ Advance Booking Confirmed!\n\n` +
+          `Booking ID: ${bookingDoc.id.substring(0, 8)}...\n` +
+          `Start: ${startTime.toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}\n` +
+          `Duration: ${bookingDuration} hour(s)\n` +
+          `Amount: ₹${totalAmount}\n\n` +
+          `Your parking spot is reserved!`,
+          { duration: 6000 }
+        );
+      } else {
+        // "Book Now" - emphasize the buffer time
+        toast.success(
+          `✅ Booking Confirmed!\n\n` +
+          `Booking ID: ${bookingDoc.id.substring(0, 8)}...\n` +
+          `🕐 Slot available from: ${startTime.toLocaleString('en-IN', { timeStyle: 'short' })}\n` +
+          `   (You have ${BUFFER_TIME_MINUTES} minutes to reach)\n` +
+          `Valid until: ${endTime.toLocaleString('en-IN', { timeStyle: 'short' })}\n` +
+          `Duration: ${bookingDuration} hour(s)\n` +
+          `Amount: ₹${totalAmount}`,
+          { duration: 8000 }
+        );
+      }
 
     } catch (error) {
       console.error("Booking error:", error);
@@ -1104,6 +1146,81 @@ Example 2: "Show me parking near Margao" -> {"origin": "CURRENT_LOCATION", "dest
     setSelectedParkingLot(lot);
     setShowBookingModal(true);
     setActiveMarker(null); // Close InfoWindow
+  };
+
+  // Check and expire no-show bookings
+  const checkNoShowBookings = useCallback(async () => {
+    try {
+      const now = new Date();
+      
+      // Query all pending_arrival bookings
+      const bookingsRef = collection(db, "bookings");
+      const q = query(
+        bookingsRef,
+        where("status", "==", "pending_arrival")
+      );
+
+      const querySnapshot = await getDocs(q);
+      
+      querySnapshot.forEach(async (docSnapshot) => {
+        const booking = docSnapshot.data();
+        
+        // Convert graceExpiryTime to Date object
+        let graceExpiry;
+        try {
+          graceExpiry = booking.graceExpiryTime instanceof Date 
+            ? booking.graceExpiryTime 
+            : booking.graceExpiryTime?.toDate?.() || new Date(booking.graceExpiryTime);
+        } catch (err) {
+          console.warn("⚠️ Could not parse graceExpiryTime for booking:", docSnapshot.id);
+          return;
+        }
+
+        // Check if grace period has expired
+        if (now > graceExpiry && !booking.arrivalConfirmed) {
+          console.log(`⏰ No-show detected for booking ${docSnapshot.id}`);
+          console.log(`   - Grace period expired at: ${graceExpiry.toLocaleString()}`);
+          console.log(`   - Parking Lot: ${booking.parkingLotName}`);
+          
+          // Update booking status to 'no_show'
+          const bookingRef = doc(db, "bookings", docSnapshot.id);
+          await updateDoc(bookingRef, {
+            status: "no_show",
+            expiredAt: serverTimestamp(),
+          });
+
+          // Free up the parking spot
+          const lotRef = doc(db, "parkingLots", booking.parkingLotId);
+          await updateDoc(lotRef, {
+            availableSpots: increment(1),
+          });
+
+          console.log(`✅ Booking ${docSnapshot.id} marked as no-show and spot freed`);
+          
+          // Optionally notify the authority (you can add notification logic here)
+        }
+      });
+    } catch (error) {
+      console.error("❌ Error checking no-show bookings:", error);
+    }
+  }, []);
+
+  // Confirm driver arrival
+  const confirmArrival = async (bookingId) => {
+    try {
+      const bookingRef = doc(db, "bookings", bookingId);
+      await updateDoc(bookingRef, {
+        status: "active",
+        arrivalConfirmed: true,
+        arrivedAt: serverTimestamp(),
+      });
+
+      toast.success("Arrival confirmed! Your parking is now active.");
+      console.log(`✅ Arrival confirmed for booking ${bookingId}`);
+    } catch (error) {
+      console.error("Error confirming arrival:", error);
+      toast.error("Failed to confirm arrival. Please try again.");
+    }
   };
 
   // Clear route and reset state
@@ -1177,6 +1294,22 @@ Example 2: "Show me parking near Margao" -> {"origin": "CURRENT_LOCATION", "dest
       console.error("Error re-filtering parking lots:", error)
     );
   }, [minSearchRadius, maxSearchRadius, destinationCoords, allParkingLots, fetchAndFilterParkingLots]);
+
+  // Periodic no-show check (every 2 minutes)
+  useEffect(() => {
+    if (!user) return;
+
+    // Check immediately on mount
+    checkNoShowBookings();
+
+    // Then check every 2 minutes
+    const interval = setInterval(() => {
+      console.log("🔍 Running periodic no-show check...");
+      checkNoShowBookings();
+    }, 2 * 60 * 1000); // 2 minutes
+
+    return () => clearInterval(interval);
+  }, [user, checkNoShowBookings]);
 
   // Driver Main View (rendered directly since auth is handled by ProtectedRoute)
   return (
@@ -1365,16 +1498,45 @@ Example 2: "Show me parking near Margao" -> {"origin": "CURRENT_LOCATION", "dest
                   
                   <div className="booking-id">
                     <span>Booking ID: {booking.id.substring(0, 12)}...</span>
+                    {booking.status === 'pending_arrival' && (
+                      <span className="status-badge pending">
+                        Waiting for Arrival
+                      </span>
+                    )}
+                    {booking.status === 'active' && booking.arrivalConfirmed && (
+                      <span className="status-badge active">
+                        ● Active
+                      </span>
+                    )}
                   </div>
                 </div>
                 
                 <div className="booking-card-footer">
-                  <button 
-                    className="cancel-booking-btn"
-                    onClick={() => handleCancelBooking(booking)}
-                  >
-                    Cancel Booking
-                  </button>
+                  {booking.status === 'pending_arrival' && (
+                    <>
+                      <button 
+                        className="confirm-arrival-btn"
+                        onClick={() => confirmArrival(booking.id)}
+                        title="Click when you arrive at the parking lot"
+                      >
+                        ✓ Confirm Arrival
+                      </button>
+                      <button 
+                        className="cancel-booking-btn"
+                        onClick={() => handleCancelBooking(booking)}
+                      >
+                        Cancel
+                      </button>
+                    </>
+                  )}
+                  {(booking.status === 'active' || booking.arrivalConfirmed) && (
+                    <button 
+                      className="cancel-booking-btn"
+                      onClick={() => handleCancelBooking(booking)}
+                    >
+                      End Parking
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
