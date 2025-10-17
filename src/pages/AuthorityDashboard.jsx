@@ -37,7 +37,17 @@ export default function AuthorityDashboard() {
     });
 
     const unsubBookings = onSnapshot(bookingsQuery, (querySnapshot) => {
-      setActiveBookings(querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      const bookings = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      console.log(`✅ Authority Dashboard: Loaded ${bookings.length} bookings (managerId: ${user.uid})`);
+      if (bookings.length > 0) {
+        console.log("Booking details:", bookings.map(b => ({
+          id: b.id,
+          parkingLot: b.parkingLotName,
+          status: b.status,
+          duration: b.duration
+        })));
+      }
+      setActiveBookings(bookings);
     });
 
     return () => {
@@ -163,14 +173,18 @@ export default function AuthorityDashboard() {
 
         {/* Live Bookings Section */}
         <div className="dashboard-section">
-          <h2><FaBookmark /> Live Bookings ({activeBookings.length})</h2>
+          <h2><FaBookmark /> Live Bookings ({activeBookings.filter(b => b.status === 'active').length})</h2>
           <div className="bookings-list">
-            {activeBookings.length > 0 ? (
-              activeBookings.map(booking => (
+            {activeBookings.filter(b => b.status === 'active').length > 0 ? (
+              activeBookings.filter(b => b.status === 'active').map(booking => (
                 <div key={booking.id} className="booking-card">
-                  <h4>{booking.lotName}</h4>
-                  <p>Booked for <strong>{booking.duration} hour(s)</strong></p>
-                  <span>Driver ID: {booking.driverId.slice(0, 8)}...</span>
+                  <h4>{booking.parkingLotName || 'Unknown Parking Lot'}</h4>
+                  <p><strong>Duration:</strong> {booking.duration} hour(s)</p>
+                  <p><strong>Amount:</strong> ₹{booking.amount}</p>
+                  <p><strong>Driver:</strong> {booking.userName || 'Unknown Driver'}</p>
+                  <p><strong>Email:</strong> {booking.userEmail || 'N/A'}</p>
+                  <p><strong>Status:</strong> <span style={{color: '#10b981', fontWeight: 'bold'}}>{booking.status}</span></p>
+                  <span style={{fontSize: '0.85rem', color: '#666'}}>Booking ID: {booking.id.slice(0, 12)}...</span>
                 </div>
               ))
             ) : (

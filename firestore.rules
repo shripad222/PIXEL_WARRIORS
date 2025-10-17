@@ -88,11 +88,13 @@ service cloud.firestore {
       );
       
       // Only drivers can create bookings
+      // Required fields: userId, parkingLotId, status, createdAt
       allow create: if isDriver()
                     && request.resource.data.userId == request.auth.uid
                     && request.resource.data.keys().hasAll([
                       'userId', 'parkingLotId', 'status', 'createdAt'
-                    ]);
+                    ])
+                    && request.resource.data.status in ['active', 'pending', 'completed', 'cancelled'];
       
       // Users can update their own bookings (e.g., cancel)
       allow update: if isSignedIn() && resource.data.userId == request.auth.uid;
