@@ -908,14 +908,32 @@ Example 2: "Show me parking near Margao" -> {"origin": "CURRENT_LOCATION", "dest
       // Don't return - allow booking to proceed
     }
 
-    // 8. Calculate booking amount
-    const pricePerHour = selectedParkingLot.pricePerHour || 50;
+    // 8. Calculate booking amount with dynamic pricing
+    const basePrice = selectedParkingLot.pricePerHour || 50;
+    
+    // Dynamic Pricing: 20% surge when availability <= 30%
+    const occupancyRate = ((selectedParkingLot.totalSpots - selectedParkingLot.availableSpots) / selectedParkingLot.totalSpots) * 100;
+    const availabilityRate = (selectedParkingLot.availableSpots / selectedParkingLot.totalSpots) * 100;
+    const isSurgePricing = availabilityRate <= 30;
+    const surgeMultiplier = isSurgePricing ? 1.20 : 1.0;
+    
+    const pricePerHour = Math.round(basePrice * surgeMultiplier);
     const totalAmount = bookingDuration * pricePerHour;
 
     if (totalAmount <= 0 || isNaN(totalAmount)) {
       toast.error("Invalid booking amount. Please try again.");
       return;
     }
+
+    console.log("💰 Pricing Details:", {
+      basePrice,
+      occupancyRate: `${occupancyRate.toFixed(1)}%`,
+      availabilityRate: `${availabilityRate.toFixed(1)}%`,
+      isSurgePricing,
+      surgeMultiplier,
+      pricePerHour,
+      totalAmount
+    });
 
     // 9. Confirm booking with user
     const startTimeStr = startTime.toLocaleString('en-IN', {
@@ -928,12 +946,15 @@ Example 2: "Show me parking near Margao" -> {"origin": "CURRENT_LOCATION", "dest
     });
 
     let confirmMessage;
+    const surgePricingInfo = isSurgePricing ? `\n🔥 High Demand Pricing Active (+20%)\n` : '';
+    
     if (isAdvanceBooking) {
       confirmMessage = `Confirm Advance Booking:\n\n` +
         `Parking: ${selectedParkingLot.name}\n` +
         `Start Time: ${startTimeStr}\n` +
         `End Time: ${endTimeStr}\n` +
         `Duration: ${bookingDuration} hour(s)\n` +
+        surgePricingInfo +
         `Amount: ₹${totalAmount}\n\n` +
         `Proceed with booking?`;
     } else {
@@ -944,6 +965,7 @@ Example 2: "Show me parking near Margao" -> {"origin": "CURRENT_LOCATION", "dest
         `   (${BUFFER_TIME_MINUTES} minutes from now - time to reach parking)\n` +
         `End Time: ${endTimeStr}\n` +
         `Duration: ${bookingDuration} hour(s)\n` +
+        surgePricingInfo +
         `Amount: ₹${totalAmount}\n\n` +
         `Proceed with booking?`;
     }
@@ -1025,6 +1047,9 @@ Example 2: "Show me parking near Margao" -> {"origin": "CURRENT_LOCATION", "dest
         duration: bookingDuration,
         amount: totalAmount,
         pricePerHour: pricePerHour,
+        basePrice: basePrice,
+        isSurgePricing: isSurgePricing,
+        surgeMultiplier: surgeMultiplier,
         
         // Tracking fields
         bookingSource: "web-app",
@@ -1043,6 +1068,9 @@ Example 2: "Show me parking near Margao" -> {"origin": "CURRENT_LOCATION", "dest
         parkingLotName: selectedParkingLot.name,
         userName: user.displayName || "Anonymous User",
         timestamp: Date.now(),
+        startTime: startTime.getTime(), // Add start time to make it more unique
+        uniqueId: `${bookingDoc.id}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, // Extra unique identifier
+        version: "1.0" // Version for future compatibility
       });
 
       await updateDoc(doc(db, "bookings", bookingDoc.id), {
@@ -1228,24 +1256,9 @@ Example 2: "Show me parking near Margao" -> {"origin": "CURRENT_LOCATION", "dest
     }
   }, []);
 
-  // Confirm driver arrival
-  const confirmArrival = async (bookingId) => {
-    try {
-      const bookingRef = doc(db, "bookings", bookingId);
-      await updateDoc(bookingRef, {
-        status: "active",
-        arrivalConfirmed: true,
-        arrivedAt: serverTimestamp(),
-      });
-
-      toast.success("Arrival confirmed! Your parking is now active.");
-      console.log(`✅ Arrival confirmed for booking ${bookingId}`);
-    } catch (error) {
-      console.error("Error confirming arrival:", error);
-      toast.error("Failed to confirm arrival. Please try again.");
-    }
-  };
-
+  // Note: Arrival confirmation is now handled exclusively by the parking authority
+  // through the Authority Dashboard. Users will wait for authority confirmation.
+  
   // Clear route and reset state
   const clearRoute = () => {
     setDirectionsResponse(null);
@@ -1578,13 +1591,17 @@ Example 2: "Show me parking near Margao" -> {"origin": "CURRENT_LOCATION", "dest
                 <div className="booking-card-footer">
                   {booking.status === 'pending_arrival' && (
                     <>
-                      <button 
-                        className="confirm-arrival-btn"
-                        onClick={() => confirmArrival(booking.id)}
-                        title="Click when you arrive at the parking lot"
-                      >
-                        ✓ Confirm Arrival
-                      </button>
+                      <div className="info-message" style={{
+                        padding: '8px 12px',
+                        background: '#fff3cd',
+                        borderRadius: '6px',
+                        fontSize: '0.9rem',
+                        color: '#856404',
+                        marginBottom: '8px',
+                        textAlign: 'center'
+                      }}>
+                        ⏳ Waiting for authority to confirm your arrival
+                      </div>
                       <button 
                         className="cancel-booking-btn"
                         onClick={() => handleCancelBooking(booking)}
@@ -1901,7 +1918,36 @@ Example 2: "Show me parking near Margao" -> {"origin": "CURRENT_LOCATION", "dest
                   <div className="booking-info-item">
                     <strong>Price:</strong>
                     <span className="price-highlight">
-                      ₹{selectedParkingLot.pricePerHour || 50}/hour
+                      {(() => {
+                        const basePrice = selectedParkingLot.pricePerHour || 50;
+                        const availabilityRate = (selectedParkingLot.availableSpots / selectedParkingLot.totalSpots) * 100;
+                        const isSurgePricing = availabilityRate <= 30;
+                        const surgePrice = Math.round(basePrice * 1.20);
+                        
+                        return isSurgePricing ? (
+                          <>
+                            <span style={{textDecoration: 'line-through', color: '#999', marginRight: '8px'}}>
+                              ₹{basePrice}/hour
+                            </span>
+                            <span style={{color: '#ff4444', fontWeight: 'bold'}}>
+                              ₹{surgePrice}/hour
+                            </span>
+                            <span style={{
+                              background: 'linear-gradient(135deg, #ff4444, #ff6b6b)',
+                              color: 'white',
+                              padding: '2px 8px',
+                              borderRadius: '12px',
+                              fontSize: '0.75rem',
+                              marginLeft: '8px',
+                              fontWeight: 'bold'
+                            }}>
+                              🔥 +20%
+                            </span>
+                          </>
+                        ) : (
+                          `₹${basePrice}/hour`
+                        );
+                      })()}
                     </span>
                   </div>
                 </div>
@@ -2074,11 +2120,49 @@ Example 2: "Show me parking near Margao" -> {"origin": "CURRENT_LOCATION", "dest
                 </div>
                 <div className="total-row">
                   <span>Rate:</span>
-                  <span>₹{selectedParkingLot.pricePerHour || 50}/hour</span>
+                  <span>
+                    {(() => {
+                      const basePrice = selectedParkingLot.pricePerHour || 50;
+                      const availabilityRate = (selectedParkingLot.availableSpots / selectedParkingLot.totalSpots) * 100;
+                      const isSurgePricing = availabilityRate <= 30;
+                      const surgePrice = Math.round(basePrice * 1.20);
+                      
+                      return isSurgePricing ? (
+                        <>
+                          <span style={{textDecoration: 'line-through', color: '#999', marginRight: '8px'}}>
+                            ₹{basePrice}
+                          </span>
+                          <span style={{color: '#ff4444', fontWeight: 'bold'}}>
+                            ₹{surgePrice}/hour
+                          </span>
+                          <span style={{
+                            background: 'linear-gradient(135deg, #ff4444, #ff6b6b)',
+                            color: 'white',
+                            padding: '2px 6px',
+                            borderRadius: '10px',
+                            fontSize: '0.7rem',
+                            marginLeft: '6px'
+                          }}>
+                            🔥 High Demand
+                          </span>
+                        </>
+                      ) : (
+                        `₹${basePrice}/hour`
+                      );
+                    })()}
+                  </span>
                 </div>
                 <div className="total-row total-amount">
                   <strong>Total Amount:</strong>
-                  <strong>₹{bookingDuration * (selectedParkingLot.pricePerHour || 50)}</strong>
+                  <strong>
+                    {(() => {
+                      const basePrice = selectedParkingLot.pricePerHour || 50;
+                      const availabilityRate = (selectedParkingLot.availableSpots / selectedParkingLot.totalSpots) * 100;
+                      const isSurgePricing = availabilityRate <= 30;
+                      const pricePerHour = isSurgePricing ? Math.round(basePrice * 1.20) : basePrice;
+                      return `₹${bookingDuration * pricePerHour}`;
+                    })()}
+                  </strong>
                 </div>
               </div>
 

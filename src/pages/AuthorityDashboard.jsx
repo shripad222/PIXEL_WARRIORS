@@ -127,13 +127,20 @@ export default function AuthorityDashboard() {
         parsedData = qrData;
       }
 
-      const { bookingId, parkingLotId } = parsedData;
+      const { bookingId, parkingLotId, uniqueId } = parsedData;
 
       if (!bookingId || !parkingLotId) {
         toast.error('Invalid QR code format - missing required fields', { id: loadingToast });
         console.error('Missing fields in QR data:', parsedData);
         return;
       }
+
+      console.log('✅ QR Code parsed successfully:', {
+        bookingId,
+        parkingLotId,
+        uniqueId,
+        scanType
+      });
 
       // Find the booking
       let booking = activeBookings.find(b => b.id === bookingId);
@@ -160,6 +167,40 @@ export default function AuthorityDashboard() {
         }
       }
 
+      // Validate that this booking belongs to the correct parking lot
+      if (booking.parkingLotId !== parkingLotId) {
+        console.log('❌ Parking lot mismatch!');
+        console.log('   - QR Code parkingLotId:', parkingLotId);
+        console.log('   - Booking parkingLotId:', booking.parkingLotId);
+        toast.error(
+          `❌ Wrong Parking Lot!\n\nThis QR code is for a different parking lot.\n\nExpected: ${booking.parkingLotName || booking.parkingLotId}\nScanned at: Current location`, 
+          { id: loadingToast, duration: 6000 }
+        );
+        return;
+      }
+
+      // Additional validation: Check if QR code data matches what's stored in booking
+      if (booking.qrCodeData && booking.qrCodeData !== qrData) {
+        try {
+          const storedQRData = JSON.parse(booking.qrCodeData);
+          const scannedQRData = typeof qrData === 'string' ? JSON.parse(qrData) : qrData;
+          
+          if (storedQRData.uniqueId !== scannedQRData.uniqueId || storedQRData.bookingId !== scannedQRData.bookingId) {
+            console.log('❌ QR Code data mismatch!');
+            console.log('   - Stored QR uniqueId:', storedQRData.uniqueId);
+            console.log('   - Scanned QR uniqueId:', scannedQRData.uniqueId);
+            toast.error(
+              `❌ Invalid QR Code!\n\nThis QR code doesn't match the booking record.\n\nPlease use the correct QR code for this booking.`, 
+              { id: loadingToast, duration: 6000 }
+            );
+            return;
+          }
+        } catch (qrValidationError) {
+          console.warn('⚠️ Could not validate QR code data format:', qrValidationError);
+          // Continue with scan - this is just a safety check
+        }
+      }
+
       const bookingRef = doc(db, "bookings", bookingId);
       const parkingLotRef = doc(db, "parkingLots", parkingLotId);
 
@@ -174,9 +215,22 @@ export default function AuthorityDashboard() {
         });
 
         // Entry scan logic
+        console.log('🔍 Detailed booking validation for ENTRY:');
+        console.log('   - Booking ID:', booking.id);
+        console.log('   - Entry Scanned:', booking.entryScanned);
+        console.log('   - Entry Time:', booking.entryTime);
+        console.log('   - Status:', booking.status);
+        console.log('   - QR Code Data (first 50 chars):', booking.qrCodeData?.substring(0, 50) + '...');
+
         if (booking.entryScanned) {
-          console.log('❌ Entry already scanned');
-          toast.error('This booking has already been scanned for entry!', { id: loadingToast });
+          console.log('❌ Entry already scanned for this booking');
+          console.log('   - Entry Time:', booking.entryTime?.toDate?.() || booking.entryTime);
+          toast.error(
+            `❌ Entry Already Scanned!\n\nThis booking was already scanned for entry.\n\nEntry Time: ${
+              booking.entryTime?.toDate?.()?.toLocaleString() || booking.entryTime || 'Unknown'
+            }`, 
+            { id: loadingToast, duration: 6000 }
+          );
           return;
         }
 
@@ -214,13 +268,30 @@ export default function AuthorityDashboard() {
 
       } else if (scanType === 'exit') {
         // Exit scan logic
+        console.log('🔍 Detailed booking validation for EXIT:');
+        console.log('   - Booking ID:', booking.id);
+        console.log('   - Entry Scanned:', booking.entryScanned);
+        console.log('   - Exit Scanned:', booking.exitScanned);
+        console.log('   - Exit Time:', booking.exitTime);
+        console.log('   - Status:', booking.status);
+
         if (!booking.entryScanned) {
-          toast.error('Entry must be scanned before exit!', { id: loadingToast });
+          toast.error(
+            `❌ Entry Not Scanned!\n\nEntry must be scanned before exit.\n\nPlease scan the entry QR first.`, 
+            { id: loadingToast, duration: 5000 }
+          );
           return;
         }
 
         if (booking.exitScanned) {
-          toast.error('This booking has already been scanned for exit!', { id: loadingToast });
+          console.log('❌ Exit already scanned for this booking');
+          console.log('   - Exit Time:', booking.exitTime?.toDate?.() || booking.exitTime);
+          toast.error(
+            `❌ Exit Already Scanned!\n\nThis booking was already scanned for exit.\n\nExit Time: ${
+              booking.exitTime?.toDate?.()?.toLocaleString() || booking.exitTime || 'Unknown'
+            }`, 
+            { id: loadingToast, duration: 6000 }
+          );
           return;
         }
 
@@ -322,12 +393,65 @@ export default function AuthorityDashboard() {
   const totalAvailable = managedLots.reduce((sum, lot) => sum + lot.availableSpots, 0);
   const occupancyPercentage = totalCapacity > 0 ? (((totalCapacity - totalAvailable) / totalCapacity) * 100).toFixed(0) : 0;
 
-  const occupancyData = [
-    { hour: '8am', occupied: 20 }, { hour: '9am', occupied: 35 }, { hour: '10am', occupied: 45 },
-    { hour: '11am', occupied: 60 }, { hour: '12pm', occupied: 75 }, { hour: '1pm', occupied: 70 },
-    { hour: '2pm', occupied: 65 }, { hour: '3pm', occupied: 55 }, { hour: '4pm', occupied: 60 },
-    { hour: '5pm', occupied: 80 },
-  ];
+  // Revenue Calculation Functions
+  const calculateRevenue = (bookings, timeframe) => {
+    const now = new Date();
+    const filtered = bookings.filter(b => {
+      if (b.status !== 'completed') return false;
+      
+      // Use exitTime (when booking was completed) or createdAt as fallback
+      const bookingDate = b.exitTime?.toDate?.() || b.createdAt?.toDate?.();
+      if (!bookingDate) return false;
+      
+      if (timeframe === 'today') {
+        return bookingDate.toDateString() === now.toDateString();
+      } else if (timeframe === 'month') {
+        return bookingDate.getMonth() === now.getMonth() && 
+               bookingDate.getFullYear() === now.getFullYear();
+      }
+      return false;
+    });
+    
+    return filtered.reduce((sum, b) => sum + (b.amount || 0), 0);
+  };
+
+  const todayRevenue = calculateRevenue(activeBookings, 'today');
+  const monthlyRevenue = calculateRevenue(activeBookings, 'month');
+
+  // Real Hourly Occupancy Data (8am-7pm)
+  const getHourlyOccupancy = () => {
+    const hours = Array.from({length: 12}, (_, i) => i + 8); // 8am-7pm
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    
+    return hours.map(hour => {
+      const bookingsAtHour = activeBookings.filter(b => {
+        const startTime = b.startTime?.toDate?.();
+        const endTime = b.endTime?.toDate?.();
+        if (!startTime || !endTime) return false;
+        
+        // Check if booking overlaps with this hour today
+        const hourStart = new Date(today);
+        hourStart.setHours(hour, 0, 0, 0);
+        const hourEnd = new Date(today);
+        hourEnd.setHours(hour + 1, 0, 0, 0);
+        
+        return startTime < hourEnd && endTime > hourStart;
+      });
+      
+      return {
+        hour: `${hour > 12 ? hour - 12 : hour}${hour >= 12 ? 'pm' : 'am'}`,
+        occupied: bookingsAtHour.length
+      };
+    });
+  };
+
+  const occupancyData = getHourlyOccupancy();
+  
+  // Peak Hour Analysis
+  const peakHour = occupancyData.length > 0 
+    ? occupancyData.reduce((max, curr) => curr.occupied > max.occupied ? curr : max, occupancyData[0])
+    : { hour: 'N/A', occupied: 0 };
 
   return (
     <div className="app-container">
@@ -358,15 +482,15 @@ export default function AuthorityDashboard() {
             </div>
             <div className="metric-card">
               <h3>Today's Revenue</h3>
-              <p>$0<span> (coming soon)</span></p>
+              <p>₹{todayRevenue.toLocaleString()}</p>
             </div>
             <div className="metric-card">
               <h3>Monthly Revenue</h3>
-              <p>$0<span> (coming soon)</span></p>
+              <p>₹{monthlyRevenue.toLocaleString()}</p>
             </div>
           </div>
           <div className="chart-container">
-            <h3>Hourly Occupancy Trend (Sample Data)</h3>
+            <h3>Hourly Occupancy Trend (Today) - Peak: {peakHour.hour} ({peakHour.occupied} bookings)</h3>
             <ResponsiveContainer width="100%" height={300}>
               <BarChart data={occupancyData} margin={{ top: 20, right: 30, left: -10, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" />
