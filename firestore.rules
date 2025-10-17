@@ -65,13 +65,18 @@ service cloud.firestore {
                     && request.resource.data.totalSpots >= request.resource.data.availableSpots
                     && request.resource.data.managerId == request.auth.uid;
       
-      // Authorities can update their own parking lots
-      // Drivers cannot update but this allows slot booking updates if needed
-      allow update: if (isAuthority() && resource.data.managerId == request.auth.uid)
-                    || (isSignedIn() && 
-                        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['availableSpots'])
-                        && request.resource.data.availableSpots >= 0
-                        && request.resource.data.availableSpots <= resource.data.totalSpots);
+      // UPDATED: Allow updates from:
+      // 1. Authorities - for managing their own parking lots
+      // 2. Authorities - for QR scan entry/exit (decrement/increment spots)
+      // 3. Authenticated users - for booking operations (spot availability changes)
+      allow update: if isSignedIn() && (
+        // Authority managing their own lot
+        (isAuthority() && resource.data.managerId == request.auth.uid) ||
+        // Any authenticated user updating only availableSpots (for booking/QR scanning)
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['availableSpots'])
+         && request.resource.data.availableSpots >= 0
+         && request.resource.data.availableSpots <= resource.data.totalSpots)
+      );
       
       // Only authorities can delete their own parking lots
       allow delete: if isAuthority() && resource.data.managerId == request.auth.uid;
@@ -82,9 +87,11 @@ service cloud.firestore {
     // ============================================
     match /bookings/{bookingId} {
       // Users can read their own bookings
+      // Authorities can read all bookings (for dashboard)
       allow read: if isSignedIn() && (
         resource.data.userId == request.auth.uid ||
-        isAuthority()
+        isAuthority() ||
+        (resource.data.managerId != null && resource.data.managerId == request.auth.uid)
       );
       
       // Only drivers can create bookings
@@ -94,12 +101,20 @@ service cloud.firestore {
                     && request.resource.data.keys().hasAll([
                       'userId', 'parkingLotId', 'status', 'createdAt'
                     ])
-                    && request.resource.data.status in ['active', 'pending_arrival', 'pending', 'completed', 'cancelled', 'no_show'];
+                    && request.resource.data.status in ['active', 'pending_arrival', 'pending', 'completed', 'cancelled', 'no_show', 'in_parking'];
       
-      // Users can update their own bookings (e.g., cancel, confirm arrival)
-      // Also allow system updates for no-show expiration
-      allow update: if (isSignedIn() && resource.data.userId == request.auth.uid)
-                    || (isSignedIn() && request.resource.data.status in ['no_show', 'active', 'pending_arrival']);
+      // UPDATED: Allow updates from:
+      // 1. Booking owner (driver) - for cancellation, etc.
+      // 2. Authority/Manager - for confirming arrival, QR scanning (entry/exit)
+      // 3. System updates - for no-show expiration
+      allow update: if isSignedIn() && (
+        // Driver can update their own booking
+        resource.data.userId == request.auth.uid ||
+        // Authority can update bookings they manage (for QR scanning, arrival confirmation)
+        (isAuthority() && resource.data.managerId == request.auth.uid) ||
+        // Allow status updates for system processes
+        request.resource.data.status in ['no_show', 'active', 'pending_arrival', 'in_parking', 'completed', 'expired']
+      );
       
       // Users can delete their own bookings
       allow delete: if isSignedIn() && resource.data.userId == request.auth.uid;

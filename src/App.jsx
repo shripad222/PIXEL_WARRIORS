@@ -11,9 +11,10 @@ import {
   InfoWindow,
   DirectionsRenderer,
 } from "@react-google-maps/api";
-import { FaParking, FaSignOutAlt, FaClock, FaMapMarkerAlt, FaUser, FaTimes } from "react-icons/fa";
+import { FaParking, FaSignOutAlt, FaClock, FaMapMarkerAlt, FaUser, FaTimes, FaQrcode, FaDownload } from "react-icons/fa";
 import { useAuth } from "./AuthContext";
 import { useNavigate } from "react-router-dom";
+import { QRCodeCanvas } from "qrcode.react";
 
 const containerStyle = {
   width: "100%",
@@ -1009,6 +1010,13 @@ Example 2: "Show me parking near Margao" -> {"origin": "CURRENT_LOCATION", "dest
         gracePeriodMinutes: GRACE_PERIOD_MINUTES, // Grace period duration
         arrivalConfirmed: false, // Will be set to true when driver arrives
         
+        // QR Code fields for entry/exit tracking
+        qrCodeData: `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, // Temporary, will update after booking created
+        entryScanned: false, // Will be set to true when entry QR is scanned
+        exitScanned: false, // Will be set to true when exit QR is scanned
+        entryTime: null, // Timestamp when entry QR scanned
+        exitTime: null, // Timestamp when exit QR scanned
+        
         // Additional metadata
         userEmail: user.email || "no-email",
         userName: user.displayName || "Anonymous User",
@@ -1027,6 +1035,20 @@ Example 2: "Show me parking near Margao" -> {"origin": "CURRENT_LOCATION", "dest
       const bookingsRef = collection(db, "bookings");
       const bookingDoc = await addDoc(bookingsRef, bookingData);
 
+      // Update QR code data with actual booking ID
+      const qrCodePayload = JSON.stringify({
+        bookingId: bookingDoc.id,
+        userId: user.uid,
+        parkingLotId: selectedParkingLot.id,
+        parkingLotName: selectedParkingLot.name,
+        userName: user.displayName || "Anonymous User",
+        timestamp: Date.now(),
+      });
+
+      await updateDoc(doc(db, "bookings", bookingDoc.id), {
+        qrCodeData: qrCodePayload,
+      });
+
       console.log("✅ Booking created successfully!");
       console.log("   - Booking ID:", bookingDoc.id);
       console.log("   - User ID:", user.uid);
@@ -1034,6 +1056,7 @@ Example 2: "Show me parking near Margao" -> {"origin": "CURRENT_LOCATION", "dest
       console.log("   - Manager ID:", selectedParkingLot.managerId || "N/A");
       console.log("   - Status: pending_arrival");
       console.log("   - Grace Expiry Time:", graceExpiryTime.toLocaleString());
+      console.log("   - QR Code Generated: ✅");
       console.log("🔄 Real-time listener should detect this change automatically...");
 
       // Step 3: Update local state to reflect changes immediately
@@ -1509,6 +1532,47 @@ Example 2: "Show me parking near Margao" -> {"origin": "CURRENT_LOCATION", "dest
                       </span>
                     )}
                   </div>
+                  
+                  {/* QR Code Section */}
+                  {booking.qrCodeData && !booking.exitScanned && (
+                    <div className="qr-code-section">
+                      <div className="qr-code-header">
+                        <FaQrcode style={{marginRight: '8px'}} />
+                        <span>
+                          {!booking.entryScanned ? 'Entry QR Code' : 'Exit QR Code'}
+                        </span>
+                      </div>
+                      <div className="qr-code-container">
+                        <QRCodeCanvas 
+                          value={booking.qrCodeData}
+                          size={180}
+                          level="H"
+                          includeMargin={true}
+                          id={`qr-${booking.id}`}
+                        />
+                      </div>
+                      <p className="qr-code-instruction">
+                        {!booking.entryScanned 
+                          ? 'Scan this QR code at the parking lot entrance'
+                          : 'Scan this QR code when leaving the parking lot'}
+                      </p>
+                      <button 
+                        className="download-qr-btn"
+                        onClick={() => {
+                          const canvas = document.getElementById(`qr-${booking.id}`);
+                          const url = canvas.toDataURL('image/png');
+                          const link = document.createElement('a');
+                          link.download = `parking-qr-${booking.id.substring(0, 8)}.png`;
+                          link.href = url;
+                          link.click();
+                          toast.success('QR Code downloaded!');
+                        }}
+                      >
+                        <FaDownload style={{marginRight: '6px'}} />
+                        Download QR Code
+                      </button>
+                    </div>
+                  )}
                 </div>
                 
                 <div className="booking-card-footer">

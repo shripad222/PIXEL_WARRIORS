@@ -628,3 +628,142 @@
     font-size: 1.5rem;
   }
 }
+
+/* QR Scanner Buttons */
+.section-header-with-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.section-header-with-actions h2 {
+  margin-bottom: 0;
+}
+
+.qr-scanner-buttons {
+  display: flex;
+  gap: 1rem;
+}
+
+.qr-scan-btn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.25rem;
+  border: none;
+  border-radius: 10px;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  color: white;
+}
+
+.qr-scan-btn.entry-btn {
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);
+}
+
+.qr-scan-btn.entry-btn:hover {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(16, 185, 129, 0.4);
+}
+
+.qr-scan-btn.exit-btn {
+  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+}
+
+.qr-scan-btn.exit-btn:hover {
+  background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
+  transform: translateY(-2px);
+  box-shadow: 0 6px 16px rgba(245, 158, 11, 0.4);
+}
+
+.qr-scan-btn:active {
+  transform: translateY(0);
+}
+
+@media (max-width: 768px) {
+  .section-header-with-actions {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .qr-scanner-buttons {
+    width: 100%;
+    flex-direction: column;
+  }
+
+  .qr-scan-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* QR Scan Status in Booking Cards */
+.qr-scan-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+  padding: 1rem;
+  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+  border: 2px solid #0ea5e9;
+  border-radius: 10px;
+  margin-top: 1rem;
+}
+
+.scan-status-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.75rem;
+  border-radius: 8px;
+  transition: all 0.3s ease;
+}
+
+.scan-status-item.pending {
+  background: #fef3c7;
+  border: 2px solid #f59e0b;
+}
+
+.scan-status-item.scanned {
+  background: #d1fae5;
+  border: 2px solid #10b981;
+}
+
+.scan-icon {
+  font-size: 1.5rem;
+}
+
+.scan-label {
+  font-weight: 700;
+  font-size: 0.85rem;
+  color: #374151;
+}
+
+.scan-time {
+  font-size: 0.75rem;
+  color: #6b7280;
+  font-weight: 600;
+}
+
+.scan-divider {
+  font-size: 1.5rem;
+  color: #0ea5e9;
+  font-weight: bold;
+}
+
+.status-active.in-parking {
+  background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 8px;
+  font-weight: 700;
+}
